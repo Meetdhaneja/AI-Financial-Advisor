@@ -1,0 +1,19 @@
+date,category,amount,transaction_type,description
+2026-03-01,Salary,5000.00,income,Monthly salary
+2026-03-02,Groceries,125.50,expense,Weekly groceries
+2026-03-03,Rent,1500.00,expense,Monthly rent payment
+2026-03-05,Utilities,85.30,expense,Electricity and water bill
+2026-03-07,Dining & Entertainment,45.00,expense,Lunch with colleagues
+2026-03-10,Freelance,1200.00,income,Freelance project payment
+2026-03-12,Gym,50.00,expense,Monthly gym membership
+2026-03-15,Shopping & Wants,320.75,expense,New shoes and clothing
+2026-03-18,Healthcare,150.00,expense,Doctor appointment
+2026-03-20,Transportation,75.00,expense,Gas and car maintenance
+2026-03-22,Savings,500.00,income,Monthly savings transfer
+2026-03-25,Dining & Entertainment,65.50,expense,Dinner reservation
+2026-03-28,Investments,300.00,expense,Stock market investment
+2026-03-30,Groceries,98.25,expense,Grocery shopping
+2026-04-01,Salary,5000.00,income,Monthly salary
+2026-04-02,EMI/Loans,400.00,expense,Car loan EMI
+2026-04-03,Utilities,92.00,expense,Electricity bill
+2026-04-05,Shopping & Wants,210.00,expense,Electronics purchase
