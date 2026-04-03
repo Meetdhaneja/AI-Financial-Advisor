@@ -42,7 +42,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # IDE
-.vscode/
+# .vscode/  # Uncommented to include VS Code settings
 .idea/
 
 # OS
