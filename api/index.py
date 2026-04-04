@@ -1,8 +1,12 @@
 import sys
-import os
-sys.path.append(os.path.dirname(__file__))
+from pathlib import Path
 
-from backend.app.main import app
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ROOT = PROJECT_ROOT / "backend"
 
-# Vercel expects the app to be named 'app'
-app = app
+for path in (PROJECT_ROOT, BACKEND_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
+
+from app.main import app

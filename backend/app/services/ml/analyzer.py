@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import pandas as pd
+from collections import defaultdict
 
 from app.models import Transaction, User
-from app.services.ml.model_loader import load_artifact
-from app.services.ml.predictor import FEATURE_COLUMNS
-from app.services.ml.preprocessing import make_realtime_features, transactions_to_monthly_frame
+from app.services.ml.preprocessing import transactions_to_monthly_rows
 
 
 def analyze_spending_behavior(user: User, transactions: list[Transaction]) -> dict:
-    classifier = load_artifact("overspending_classifier.joblib")
-    metadata = load_artifact("model_metadata.joblib")
-    monthly_frame = transactions_to_monthly_frame(transactions, user.monthly_income_default)
+    monthly_rows = transactions_to_monthly_rows(transactions, user.monthly_income_default)
 
-    if monthly_frame.empty:
+    if not monthly_rows:
         return {
             "risk_level": "low",
             "risk_score": 0.2,
@@ -23,10 +19,18 @@ def analyze_spending_behavior(user: User, transactions: list[Transaction]) -> di
             "attention_areas": ["Add a few months of transactions to unlock personalized overspending coaching."],
         }
 
-    feature_frame = make_realtime_features(monthly_frame)
-    latest = feature_frame.iloc[-1]
-    input_frame = pd.DataFrame([{column: latest[column] for column in FEATURE_COLUMNS}])
-    probability = float(classifier.predict_proba(input_frame)[0][1])
+    latest = monthly_rows[-1]
+    discretionary_drift = max(float(latest["Discretionary"]) - float(latest["DiscretionaryRolling3"]), 0.0)
+    probability = min(
+        1.0,
+        max(
+            0.05,
+            float(latest["ExpenseRatio"]) * 0.65
+            + (0.2 if discretionary_drift > 1000 else 0.0)
+            + (0.15 if float(latest["HasEMI"]) else 0.0)
+            + (0.1 if float(latest["HealthSpikeFlag"]) else 0.0),
+        ),
+    )
 
     if probability >= 0.75:
         risk_level = "high"
@@ -38,18 +42,19 @@ def analyze_spending_behavior(user: User, transactions: list[Transaction]) -> di
     signals = []
     if latest["ExpenseRatio"] > 0.8:
         signals.append("Expenses are consuming more than 80% of income.")
-    if latest["Discretionary"] > latest["DiscretionaryRolling3"] * 1.15:
+    if float(latest["Discretionary"]) > float(latest["DiscretionaryRolling3"]) * 1.15:
         signals.append("Discretionary spending is above the recent rolling average.")
-    if latest["HasEMI"] == 1:
+    if float(latest["HasEMI"]) == 1:
         signals.append("Debt obligations are present and reduce flexibility.")
     if not signals:
         signals.append("Spending pattern is stable relative to recent history.")
 
-    category_flags = [
-        name
-        for name in ["Groceries", "Healthcare", "Dining & Entertainment", "Shopping & Wants", "EMI/Loans"]
-        if float(latest.get(name, 0.0)) > metadata["category_alert_thresholds"].get(name, float("inf"))
-    ]
+    recent_rows = monthly_rows[-3:] if len(monthly_rows) >= 3 else monthly_rows
+    category_flags = []
+    for name in ["Groceries", "Healthcare", "Dining & Entertainment", "Shopping & Wants", "EMI/Loans"]:
+        recent_average = sum(float(item.get(name, 0.0)) for item in recent_rows) / max(len(recent_rows), 1)
+        if recent_average and float(latest.get(name, 0.0)) > recent_average * 1.2:
+            category_flags.append(name)
 
     user_budgets = user.category_budget_preferences or {}
     overspending_categories = []
@@ -65,7 +70,7 @@ def analyze_spending_behavior(user: User, transactions: list[Transaction]) -> di
     ]:
         current_amount = float(latest.get(name, 0.0))
         preferred_budget = float(user_budgets.get(name, 0.0)) if user_budgets.get(name) is not None else 0.0
-        rolling_reference = float(feature_frame[name].rolling(3, min_periods=1).mean().iloc[-1]) if name in feature_frame else current_amount
+        rolling_reference = sum(float(item.get(name, 0.0)) for item in recent_rows) / max(len(recent_rows), 1)
         threshold = preferred_budget if preferred_budget > 0 else rolling_reference * 1.1
         if current_amount > threshold and threshold > 0:
             overspending_categories.append(
@@ -102,18 +107,29 @@ def analyze_spending_behavior(user: User, transactions: list[Transaction]) -> di
 
 
 def detect_transaction_anomaly(amount: float, category_name: str, transaction_type: str) -> dict:
-    detector = load_artifact("anomaly_detector.joblib")
-    metadata = load_artifact("model_metadata.joblib")
-    category_index = metadata["anomaly_category_map"].get(category_name, 0)
-    transaction_flag = 1 if transaction_type == "expense" else 0
-    input_frame = pd.DataFrame([{"amount": amount, "category_idx": category_index, "transaction_flag": transaction_flag}])
-    prediction = int(detector.predict(input_frame)[0])
-    score = float(detector.score_samples(input_frame)[0])
-    category_median = metadata["category_medians"].get(category_name, 0.0)
-    z_score = ((amount - category_median) / category_median) if category_median else 0.0
-    is_anomaly = prediction == -1 or z_score > 1.25
+    category_baselines = defaultdict(
+        lambda: 2500.0,
+        {
+            "Rent": 12000.0,
+            "Groceries": 4500.0,
+            "Transportation": 2500.0,
+            "Utilities": 2200.0,
+            "Healthcare": 1800.0,
+            "Dining & Entertainment": 3000.0,
+            "Shopping & Wants": 2800.0,
+            "EMI/Loans": 6500.0,
+            "Investments": 5000.0,
+            "Savings": 6000.0,
+            "Salary": 45000.0,
+            "Freelance": 15000.0,
+        },
+    )
+    baseline = category_baselines[category_name]
+    multiplier = 1.7 if transaction_type == "expense" else 2.2
+    score = (amount - baseline) / max(baseline, 1.0)
+    is_anomaly = amount > baseline * multiplier
     reason = (
-        f"Transaction is materially above the category median ({category_median:.2f})."
+        f"Transaction is well above the usual range for {category_name}."
         if is_anomaly
         else "Transaction sits within the expected category range."
     )

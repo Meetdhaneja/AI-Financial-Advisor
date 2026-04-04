@@ -3,17 +3,17 @@ from __future__ import annotations
 from app.models import Transaction, User
 from app.services.ml.analyzer import analyze_spending_behavior
 from app.services.ml.predictor import build_prediction_payload
-from app.services.ml.preprocessing import transactions_to_monthly_frame
+from app.services.ml.preprocessing import transactions_to_monthly_rows
 
 
 def build_budget_recommendation(user: User, transactions: list[Transaction]) -> dict:
     prediction = build_prediction_payload(user, transactions)
     analysis = analyze_spending_behavior(user, transactions)
-    monthly_frame = transactions_to_monthly_frame(transactions, user.monthly_income_default)
+    monthly_rows = transactions_to_monthly_rows(transactions, user.monthly_income_default)
 
     latest_income = (
-        float(monthly_frame.iloc[-1]["Income"])
-        if not monthly_frame.empty and "Income" in monthly_frame.columns
+        float(monthly_rows[-1]["Income"])
+        if monthly_rows
         else float(user.monthly_income_default or 0.0)
     )
     predicted_expense = prediction["predicted_amount"]

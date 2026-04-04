@@ -28,11 +28,15 @@ export default function RegisterPage() {
       });
       navigate("/");
     } catch (registrationError) {
-      const detail = registrationError.response?.data?.detail;
-      if (Array.isArray(detail)) {
-        setError(detail.map((item) => item.msg).join(", "));
+      if (registrationError.code === "ERR_NETWORK") {
+        setError("Could not connect to the server. Please check if the backend is running.");
       } else {
-        setError(detail || "Registration failed.");
+        const detail = registrationError.response?.data?.detail;
+        if (Array.isArray(detail)) {
+          setError(detail.map((item) => item.msg).join(", "));
+        } else {
+          setError(detail || "Registration failed.");
+        }
       }
     } finally {
       setSubmitting(false);
@@ -62,6 +66,12 @@ export default function RegisterPage() {
             <option value="medium">Medium risk</option>
             <option value="high">High risk</option>
           </select>
+        </div>
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+          <p className="font-semibold text-white">What does risk profile mean?</p>
+          <p className="mt-2"><span className="font-medium text-brand-100">Low risk</span>: safer plan, higher emergency-fund focus, lower investment risk.</p>
+          <p className="mt-2"><span className="font-medium text-brand-100">Medium risk</span>: balanced savings and investment plan for most users.</p>
+          <p className="mt-2"><span className="font-medium text-brand-100">High risk</span>: more aggressive investment mix with higher ups and downs.</p>
         </div>
         {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
         <button disabled={submitting} className="mt-6 rounded-2xl bg-brand-500 px-5 py-3 font-semibold text-white hover:bg-brand-600 disabled:opacity-70">

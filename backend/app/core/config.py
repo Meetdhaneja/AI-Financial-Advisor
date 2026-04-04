@@ -1,14 +1,15 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
-    app_name: str = "AI Personal Finance Advisor"
+    app_name: str = "SaveBud"
     api_v1_prefix: str = "/api/v1"
     app_env: str = "development"
     debug: bool = True
@@ -28,6 +29,36 @@ class Settings(BaseSettings):
         extra="ignore",
         protected_namespaces=(),
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip()
+        if normalized.startswith("postgres://"):
+            normalized = normalized.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif normalized.startswith("postgresql://"):
+            normalized = normalized.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        if "asyncpg" not in normalized:
+            return normalized
+
+        parts = urlsplit(normalized)
+        query_pairs = []
+        has_sslmode = False
+        for key, item in parse_qsl(parts.query, keep_blank_values=True):
+            if key == "channel_binding":
+                continue
+            if key == "sslmode":
+                has_sslmode = True
+            query_pairs.append((key, item))
+
+        if not has_sslmode:
+            query_pairs.append(("sslmode", "require"))
+
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query_pairs), parts.fragment))
 
     @computed_field  # type: ignore[misc]
     @property

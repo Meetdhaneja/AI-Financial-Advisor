@@ -14,7 +14,11 @@ export default function LoginPage() {
       await login(form.email, form.password);
       navigate("/");
     } catch (loginError) {
-      setError(loginError.response?.data?.detail || "Login failed.");
+      if (loginError.code === "ERR_NETWORK") {
+        setError("Could not connect to the server. Please check if the backend is running.");
+      } else {
+        setError(loginError.response?.data?.detail || "Login failed.");
+      }
     }
   };
 

@@ -20,6 +20,10 @@ def ensure_model_artifacts() -> None:
     if all(path.exists() for path in required):
         return
 
+    if settings.app_env != "development":
+        missing = ", ".join(path.name for path in required if not path.exists())
+        raise FileNotFoundError(f"Missing required model artifacts: {missing}")
+
     from ml.pipelines.train_models import train_and_save_models
 
     train_and_save_models()
@@ -32,6 +36,8 @@ def load_artifact(filename: str) -> Any:
     try:
         return joblib.load(artifact_path)
     except Exception:
+        if settings.app_env != "development":
+            raise
         from ml.pipelines.train_models import train_and_save_models
 
         train_and_save_models()
